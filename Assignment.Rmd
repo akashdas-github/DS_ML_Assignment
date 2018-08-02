@@ -1,0 +1,135 @@
+---
+title: "Machine Learning Project Assignment"
+author: "Akash Das"
+date: "27 July 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+A group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+Read more: The data for this project come from this source: <http://groupware.les.inf.puc-rio.br/har>.
+
+**The goal of your project is to predict the manner in which they did the exercise.**This is the "classe" variable in the training set. You may use any of the other variables to predict with.
+
+# Exploratory Data Analysis
+
+1. Load Libraries
+```{r libs,results=FALSE, warning=FALSE,}
+setwd("E:/Coursera/git-folder/ML_assgn")
+library(caret)
+library(rpart)
+library(randomForest)
+set.seed(12345)
+
+```
+
+
+
+```{r Data1,cache=FALSE}
+# Path of the data.
+
+UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# download the data
+training <- read.csv(url(UrlTrain))
+testing  <- read.csv(url(UrlTest))
+
+dim(training)
+
+
+```
+
+
+We have total 160 columns in the data set. Below is some description
+
+* Column 1 to 7 are index
+*column 8 to 159 contains user data in various form. the variable name includes any of following string to understand the respective sensor "_belt, _arm, _dumbbell, _forearm".
+* Column 160 : classe holds the data for execution type. 
+
+
+```{r Data2,cache=FALSE}
+str(training[,c(1:10,160)])
+sensorColumns = grep(pattern = "_belt|_arm|_dumbbell|_forearm", names(training))
+# total number of columns holding user data 
+  length(sensorColumns)
+# Start Column  
+  head(sensorColumns,1)
+# Last Column  
+  tail(sensorColumns,1)
+```
+
+#Data Cleaning.
+In the dataset we have lots of variable with lots of NA. Also we can remove initial index variables as well
+
+
+```{r Data3,cache=FALSE}
+# remove the index variables
+training_Updated <- training[,-(1:7)]
+
+#Remove NA
+NZV <- nearZeroVar(training_Updated[,1:152])
+training_Updated <- training_Updated[, -NZV]
+
+AllNA    <- sapply(training_Updated, function(x) mean(is.na(x))) > 0.95
+training_Updated <- training_Updated[, AllNA==FALSE]
+
+dim(training_Updated)
+training_Updated <- na.omit(training_Updated) 
+table(complete.cases(training_Updated))
+table(sapply(training_Updated[1,], class))
+
+```
+
+After data cleaning we have 53 columns now and there is no NA in the data. All variables are numeric or integer except one(Classe).
+
+#Data Preparetion for traning 
+```{r Data4,cache=FALSE}
+set.seed(111)
+# make a partition in training data set.
+inTrain = createDataPartition(training_Updated$classe,p=0.7,list=FALSE)
+TrainSet = training_Updated[ inTrain,]
+TestSet = training_Updated[ -inTrain,]
+dim(TrainSet)
+
+```
+
+
+#Prediction Model Building
+
+Method: Random Forest
+
+```{r Data6,cache=FALSE}
+set.seed(112)
+
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRF <- train(classe ~ ., data=TrainSet, method="rf",trControl=controlRF)
+modFitRF$finalModel
+
+#Prediction
+PredictRF <- predict(modFitRF,newdata = TestSet)
+ConfMatrix<- confusionMatrix(PredictRF,TestSet$classe)
+ConfMatrix
+
+#Plot the result
+plot(ConfMatrix$table,col=ConfMatrix$byClass,main = "Random Forest")
+
+```
+
+We have an accurecy of 0.9917 and the Cohen's kappa indicator of concordance shows the predictor has a low out of sample error rate. 
+
+We can check other methods like Decision tree or GBM to check respective accurecy and compare the accuracy to choose best one. However For this assignment We can use this prediction from random Forest for 20 quiz results.
+
+
+
+```{r Data7,cache=FALSE}
+PredictQuiz <- predict(modFitRF, newdata=testing)
+PredictQuiz
+
+```
+
